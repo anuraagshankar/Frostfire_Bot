@@ -2,12 +2,14 @@
 #include <string>
 #include <vector>
 #include <math.h>
+#include <chrono> 
 #define invalid 1000
 #define infinity 1000000
 #define white 0
 #define black 1
 
 using namespace std;
+using namespace std::chrono; 
 typedef vector<vector<int>> Board;
 
 // bot functions
@@ -20,6 +22,8 @@ string findNeighbour(string pos, string dir);
 vector<int> minimax(int depth, bool isMax);
 string botMove();
 void display();
+
+int count = 0;
 
 class abalone
 {
@@ -491,10 +495,16 @@ void abalone::playWithBot()
 		displayGame();
 
 		setBoard(*this);
-		generateMarbles();
+		auto start = high_resolution_clock::now(); 
 		string compMove = botMove();
+		auto stop = high_resolution_clock::now(); 
+		auto duration = duration_cast<milliseconds>(stop - start); 
 		cout << "Bot's Move: " << compMove << endl;
-		coor = isValid(compMove);
+		cout << "Count: " << count << endl;
+		cout << "Time taken: " << duration.count() << "ms" << endl;
+		count = 0;
+		string s1 = compMove.substr(0, 2), s2 = compMove.substr(3, 2);
+		coor = getCoordinates(s1, s2);
 		move(coor[0], coor[1]);
 		displayGame();
 		activePlayer = !activePlayer;
@@ -508,15 +518,7 @@ void abalone::playWithBot()
 }
 
 
-struct marble
-{
-	string position;
-	int centerDistance;
-	int grouping;
-};
-
 abalone comp(black);
-vector<vector<marble>> marbles;
 int botPlayer = black;
 int user = white;
 
@@ -567,38 +569,6 @@ void display()
 	comp.displayGame();
 }
 
-void generateMarbles()
-{
-	marbles.erase(marbles.begin(), marbles.end());
-	if(marbles.size() == 0)
-	{
-		vector<marble> t1;
-		vector<marble> t2;
-		marbles.push_back(t1);
-		marbles.push_back(t2);
-	}
-	for(int i = 0; i < comp.board.size(); i++)
-	{
-		for(int j = 0; j < comp.board[i].size(); j++)
-		{
-			// if white marble is found add it to white sparse matrix, if black then black sparse matrix
-			if(comp.board[i][j] == white)
-			{
-				string coor = comp.getCoor({i, j});
-				marbles[white].push_back({coor, calcCenterDistance(coor), calcGrouping(coor)});
-			}
-
-			else if(comp.board[i][j] == black)
-			{
-				string coor = comp.getCoor({i, j});
-				marbles[black].push_back({coor, calcCenterDistance(coor), calcGrouping(coor)});
-			}
-		}
-	}
-	comp.noOfMarbles[white] = marbles[white].size();
-	comp.noOfMarbles[black] = marbles[black].size();
-}
-
 int evaluate()
 {
 	if(comp.winner() == botPlayer)
@@ -614,27 +584,19 @@ int evaluate()
 
 	// +1000 for each marble bot has extra, -1000 for each marble player has extra
 	int centerDistance = 0, grouping = 0, profit;
-	if(botPlayer == white)
+	profit = comp.noOfMarbles[botPlayer] - comp.noOfMarbles[!botPlayer];
+	value += profit * 1000;
+	for(int i = 0; i < comp.board.size(); i++)
 	{
-		profit = comp.noOfMarbles[white] - comp.noOfMarbles[black];
-		value += profit *1000;
-		for(int i = 0; i < marbles[white].size(); i++)
+		for(int j = 0; j < comp.board[i].size(); j++)
 		{
-			centerDistance += marbles[white][i].centerDistance;
-			grouping += marbles[white][i].grouping;
+			if(comp.board[i][j] == botPlayer)
+			{
+				centerDistance += calcCenterDistance(comp.getCoor({i, j}));
+				grouping += calcGrouping(comp.getCoor({i, j}));
+			}
 		}
-	}
-	else
-	{
-		profit = comp.noOfMarbles[black] - comp.noOfMarbles[white];
-		value += profit *1000;
-		for(int i = 0; i < marbles[black].size(); i++)
-		{
-			centerDistance += marbles[black][i].centerDistance;
-			grouping += marbles[black][i].grouping;
-		}
-	}
-	
+	}	
 
 	if(centerDistance < 18) value += 400;
 	else if(centerDistance < 23) value += 300;
@@ -679,140 +641,147 @@ string findNeighbour(string pos, string dir)
 	return pos;
 }
 
-void showMarbles()
-{
-	for(int i = 0; i < marbles[black].size(); i++) cout << marbles[black][i].position << " ";
-	cout << endl;
-}
-
 vector<int> minimax(int depth, bool isMax)
 {
+	count++;
 	int value = evaluate();
 
 	if(value == infinity) return {infinity, depth};	// bot wins
 	else if(value == -infinity) return {infinity, depth};	// player wins
-	else if(depth == 2) return {value, depth};
+	else if(depth == 3) return {value, depth};
 
 	if(isMax) // maximizer's move
 	{
 		int maxVal = -infinity;
 		int leastDepth = 100;
-		for(int i = 0; i < marbles[botPlayer].size(); i++) // each available bot's marble
+
+		for(int i = 0; i < comp.board.size(); i++)
 		{
-			if(marbles[botPlayer][i].grouping) // marble must have neighbours
+			for(int j = 0; j < comp.board[i].size(); j++) // every board position
 			{
-				string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
-				int count = 0; // keeps count of number of neighbours visited
-				for(int j = 0; j < 6; j++)
+				if(comp.board[i][j] == botPlayer)
 				{
-					string marblePos = marbles[botPlayer][i].position;
-					string neighbour = findNeighbour(marblePos, dirs[j]);
-					vector<vector<int>> coors = {comp.getPair(marblePos), comp.getPair(neighbour)};
-					// neighbour must exist
-					if(comp.inBoard(coors))
+					string marblePos = comp.getCoor({i, j});
+					int grouping = calcGrouping(marblePos);
+					string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
+					int count = 0; // keeps count of number of neighbours visited
+					for(int j = 0; j < 6; j++)
 					{
-						vector<int> xy = comp.getPair(neighbour);
-						// neighbour must be the same marble
-						if(comp.board[xy[0]][xy[1]] == botPlayer)
+						// finding apparent neighbour position
+						string neighbour = findNeighbour(marblePos, dirs[j]);
+						// coordinates of marble and neighbour
+						vector<vector<int>> coors = {comp.getPair(marblePos), comp.getPair(neighbour)};
+
+						// if neighbour exists
+						if(comp.inBoard(coors))
 						{
-							// similar logic to play() in abalone
-
-							Board temp = comp.board;
-							string tempMove = marblePos + " " + neighbour;
-							comp.activePlayer = black;
-							vector<vector<vector<int>>> coordinates = comp.isValid(tempMove);
-							if(coordinates.size())
+							// if neighbour is of the same type
+							if(comp.board[coors[1][0]][coors[1][1]] == botPlayer)
 							{
-								// making the move
-								comp.move(coordinates[0], coordinates[1]);
-								generateMarbles();
-								comp.activePlayer = !comp.activePlayer;
+								// creating temporary board to undo
+								Board temp = comp.board;
+								int whites = comp.noOfMarbles[white], blacks = comp.noOfMarbles[black];
+								string tempMove = marblePos + " " + neighbour;
+								vector<vector<vector<int>>> coordinates = comp.isValid(tempMove);
 
-								vector<int> val = minimax(depth+1, false);
-								if(val[0] > maxVal)
+								// coordinates will be non-empty if move is valid
+								if(coordinates.size())
 								{
-									maxVal = val[0];
-									leastDepth = val[1];
-								}
-								else  if(val[0] >= maxVal && val[1] < depth)
-								{
-									maxVal = val[0];
-									leastDepth = val[1];
-								}
+									// making the move
+									comp.move(coordinates[0], coordinates[1]);
+									comp.activePlayer = !comp.activePlayer;
 
-								// undo the move
-								comp.activePlayer = !comp.activePlayer;
-								comp.board = temp;
-								generateMarbles();
+									vector<int> val = minimax(depth+1, false);
+									if(val[0] > maxVal)
+									{
+										maxVal = val[0];
+										leastDepth = val[1];
+									}
+									else  if(val[0] >= maxVal && val[1] < depth)
+									{
+										maxVal = val[0];
+										leastDepth = val[1];
+									}
+
+									// undo the move
+									comp.activePlayer = !comp.activePlayer;
+									comp.board = temp;
+									comp.noOfMarbles[white] = whites;
+									comp.noOfMarbles[black] = blacks;
+								}
+								count++;
+								if(count == grouping) break;
 							}
-							count++;
 						}
-
-						// if all neighbours have been visited, no need to look further
-						if(count == marbles[botPlayer][i].grouping) break;
 					}
 				}
 			}
 		}
-
 		return {maxVal, leastDepth};
 	}
 	else // minimizer's code
 	{
 		int minVal = infinity;
 		int leastDepth = 100;
-		for(int i = 0; i < marbles[user].size(); i++) // each available bot's marble
+
+		for(int i = 0; i < comp.board.size(); i++)
 		{
-			if(marbles[user][i].grouping) // marble must have neighbours
+			for(int j = 0; j < comp.board[i].size(); j++) // every board position
 			{
-				string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
-				int count = 0; // keeps count of number of neighbours visited
-				for(int j = 0; j < 6; j++)
+				if(comp.board[i][j] == user)
 				{
-					string marblePos = marbles[user][i].position;
-					string neighbour = findNeighbour(marblePos, dirs[j]);
-					vector<vector<int>> coors = {comp.getPair(marblePos), comp.getPair(neighbour)};
-					// neighbour must exist
-					if(comp.inBoard(coors))
+					string marblePos = comp.getCoor({i, j});
+					int grouping = calcGrouping(marblePos);
+					string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
+					int count = 0; // keeps count of number of neighbours visited
+					for(int j = 0; j < 6; j++)
 					{
-						vector<int> xy = comp.getPair(neighbour);
-						// neighbour must be the same marble
-						if(comp.board[xy[0]][xy[1]] == user)
+						// finding apparent neighbour position
+						string neighbour = findNeighbour(marblePos, dirs[j]);
+						// coordinates of marble and neighbour
+						vector<vector<int>> coors = {comp.getPair(marblePos), comp.getPair(neighbour)};
+
+						// if neighbour exists
+						if(comp.inBoard(coors))
 						{
-							// similar logic to play() in abalone
-
-							Board temp = comp.board;
-							string tempMove = marblePos + " " + neighbour;
-							vector<vector<vector<int>>> coordinates = comp.isValid(tempMove);
-							if(coordinates.size())
+							// if neighbour is of the same type
+							if(comp.board[coors[1][0]][coors[1][1]] == user)
 							{
-								// making the move
-								comp.move(coordinates[0], coordinates[1]);
-								generateMarbles();
-								comp.activePlayer = !comp.activePlayer;
+								// creating temporary board to undo
+								Board temp = comp.board;
+								int whites = comp.noOfMarbles[white], blacks = comp.noOfMarbles[black];
+								string tempMove = marblePos + " " + neighbour;
+								vector<vector<vector<int>>> coordinates = comp.isValid(tempMove);
 
-								vector<int> val = minimax(depth+1, true);
-								if(val[0] < minVal)
+								// coordinates will be non-empty if move is valid
+								if(coordinates.size())
 								{
-									minVal = val[0];
-									leastDepth = val[1];
-								}
-								else  if(val[0] <= minVal && val[1] < depth)
-								{
-									minVal = val[0];
-									leastDepth = val[1];
-								}
+									// making the move
+									comp.move(coordinates[0], coordinates[1]);
+									comp.activePlayer = !comp.activePlayer;
 
-								// undo the move
-								comp.activePlayer = !comp.activePlayer;
-								comp.board = temp;
-								generateMarbles();
+									vector<int> val = minimax(depth+1, true);
+									if(val[0] < minVal)
+									{
+										minVal = val[0];
+										leastDepth = val[1];
+									}
+									else  if(val[0] <= minVal && val[1] < depth)
+									{
+										minVal = val[0];
+										leastDepth = val[1];
+									}
+
+									// undo the move
+									comp.activePlayer = !comp.activePlayer;
+									comp.board = temp;
+									comp.noOfMarbles[white] = whites;
+									comp.noOfMarbles[black] = blacks;
+								}
+								count++;
+								if(count == grouping) break;
 							}
-							count++;
 						}
-
-						// if all neighbours have been visited, no need to look further
-						if(count == marbles[user][i].grouping) break;
 					}
 				}
 			}
@@ -827,62 +796,66 @@ string botMove()
 {
 	int bestVal = -infinity, leastDepth = 100;
 	string bestMove;
-	for(int i = 0; i < marbles[botPlayer].size(); i++) // each available bot's marble
+	for(int i = 0; i < comp.board.size(); i++)
 	{
-		if(marbles[botPlayer][i].grouping) // marble must have neighbours
+		for(int j = 0; j < comp.board[i].size(); j++) // every board position
 		{
-			string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
-			int count = 0; // keeps count of number of neighbours visited
-			for(int j = 0; j < 6; j++)
+			if(comp.board[i][j] == botPlayer)
 			{
-				string marblePos = marbles[botPlayer][i].position;
-				string neighbour = findNeighbour(marblePos, dirs[j]);
-				vector<vector<int>> coors = {comp.getPair(marblePos), comp.getPair(neighbour)};
-
-				// neighbour must exist
-				if(comp.inBoard(coors))
+				string marblePos = comp.getCoor({i, j});
+				int grouping = calcGrouping(marblePos);
+				string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
+				int count = 0; // keeps count of number of neighbours visited
+				for(int j = 0; j < 6; j++)
 				{
-					vector<int> xy = comp.getPair(neighbour);
-					// neighbour must be the same marble
-					if(comp.board[xy[0]][xy[1]] == botPlayer)
+					// finding apparent neighbour position
+					string neighbour = findNeighbour(marblePos, dirs[j]);
+					// coordinates of marble and neighbour
+					vector<vector<int>> coors = {comp.getPair(marblePos), comp.getPair(neighbour)};
+
+					// if neighbour exists
+					if(comp.inBoard(coors))
 					{
-						// similar logic to play() in abalone
-
-						Board temp = comp.board;
-						string tempMove = marblePos + " " + neighbour;
-
-						vector<vector<vector<int>>> coordinates = comp.isValid(tempMove);
-						if(coordinates.size())
+						// if neighbour is of the same type
+						if(comp.board[coors[1][0]][coors[1][1]] == botPlayer)
 						{
-							// making the move
-							comp.move(coordinates[0], coordinates[1]);
-							generateMarbles();
-							comp.activePlayer = !comp.activePlayer;
+							// creating temporary board to undo
+							Board temp = comp.board;
+							int whites = comp.noOfMarbles[white], blacks = comp.noOfMarbles[black];
+							string tempMove = marblePos + " " + neighbour;
+							vector<vector<vector<int>>> coordinates = comp.isValid(tempMove);
 
-							vector<int> val = minimax(0, false);
-							if(val[0] > bestVal)
+							// coordinates will be non-empty if move is valid
+							if(coordinates.size())
 							{
-								bestVal = val[0];
-								leastDepth = val[1];
-								bestMove = tempMove;
-							}
-							else if(val[0] == bestVal && val[1] < leastDepth)
-							{
-								bestVal = val[0];
-								leastDepth = val[1];
-								bestMove = tempMove;
-							}
+								// making the move
+								comp.move(coordinates[0], coordinates[1]);
+								comp.activePlayer = !comp.activePlayer;
 
-							// undo the move
-							comp.activePlayer = !comp.activePlayer;
-							comp.board = temp;
-							generateMarbles();
+								vector<int> val = minimax(0, false);
+								if(val[0] > bestVal)
+								{
+									bestVal = val[0];
+									leastDepth = val[1];
+									bestMove = tempMove;
+								}
+								else  if(val[0] >= bestVal && val[1] < leastDepth)
+								{
+									bestVal = val[0];
+									leastDepth = val[1];
+									bestMove = tempMove;
+								}
+
+								// undo the move
+								comp.activePlayer = !comp.activePlayer;
+								comp.board = temp;
+								comp.noOfMarbles[white] = whites;
+								comp.noOfMarbles[black] = blacks;
+							}
+							count++;
+							if(count == grouping) break;
 						}
-						count++;
 					}
-
-					// if all neighbours have been visited, no need to look further
-					if(count == marbles[botPlayer][i].grouping) break;
 				}
 			}
 		}
@@ -894,6 +867,7 @@ int main()
 {
 	abalone a;
 	a.playWithBot();
+	
 	cout << "Press any key to continue...";
 	getchar();
 }
