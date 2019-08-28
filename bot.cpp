@@ -11,30 +11,22 @@
 using namespace std;
 using namespace std::chrono; 
 typedef vector<vector<int>> Board;
-
-// bot functions
-void setBoard(Board b);
-int calcCenterDistance(string pos);
-int calcGrouping(string pos);
-void generateMarbles();
-int evaluate();
-string findNeighbour(string pos, string dir);
-vector<int> minimax(int depth, bool isMax);
-string botMove();
-void display();
+class bot;
+void playWithBot(bot b);
 
 int count = 0;
 
 class abalone
 {
 	friend class bot;
-
+	friend void playWithBot(bot b);
 	// data members
 	vector<vector<int>> board;
 	int activePlayer; // assuming white starts
 	int noOfMarbles[2];
 
 	// member functions
+
 	bool isStringValid(string);
 	vector<int> getPair(string s); // gets the indices of an RD pair
 	string getCoor(vector<int> xy); // gets string coordinates of vector indices
@@ -50,20 +42,8 @@ class abalone
 	int winner(); // returns winners number
 	vector<vector<vector<int>>> isValid(string s); // returns initial and final coordinates if the move is valid
 													// else will return an empty vector
-
-	// bot functions
-	friend void setBoard(abalone a);
-	friend int calcCenterDistance(string pos);
-	friend int calcGrouping(string pos);
-	friend void generateMarbles();
-	friend int evaluate();
-	friend string findNeighbour(string pos, string dir);
-	friend vector<int> minimax(int depth, bool isMax);
-	friend string botMove();
-	friend void display();
-
-
-public:
+	
+public:	
 	abalone(int player);
 	void displayGame(); // display in game format
 	void play(); // actual gameplay function
@@ -353,7 +333,8 @@ bool abalone::cornerPush(vector<vector<int>> inicoor, string dir)
 	else return 0;
 }
 
-bool abalone::inBoard(vector<vector<int>> finalPos) {
+bool abalone::inBoard(vector<vector<int>> finalPos) 
+{
 	bool flag = false;
 	const int rowIndex = 6;
 	int count = 0, i, index;
@@ -460,76 +441,41 @@ void abalone::play()
 	return;
 }
 
-void abalone::playWithBot()
+class bot
 {
-	displayGame();
-	string s;
-	while(winner() == -1)
-	{
-		// assuming player starts
-		cout << "Your Move: ";
-		getline(cin, s);
+	abalone comp;
+	int botPlayer;
+	int user;
+public:
+	bot(abalone a, int bP);
+	void setBoard(abalone a);
+	int calcCenterDistance(string pos);
+	int calcGrouping(string pos);
+	void generateMarbles();
+	int evaluate();
+	string findNeighbour(string pos, string dir);
+	vector<int> minimax(int depth, bool isMax);
+	void makeMove(vector<vector<vector<int>>> coordinates);
+	string botMove();
+	void display();
+};
 
-		if (s == "exit") return;
-
-		vector<vector<vector<int>>> coor = isValid(s); // returns an empty vector for a false move
-														// if move is valid, gives us initial and final coordinates
-
-		if (coor.size()) // move is valid
-		{
-			move(coor[0], coor[1]);
-			activePlayer = !activePlayer; // switch players
-		}
-		else
-		{
-			cout << "Invalid Move!" << endl;
-			continue;
-		}
-
-		if(winner() == white)
-		{
-			cout << "You Win!" << endl;
-			return;
-		}
-
-		displayGame();
-
-		setBoard(*this);
-		auto start = high_resolution_clock::now(); 
-		string compMove = botMove();
-		auto stop = high_resolution_clock::now(); 
-		auto duration = duration_cast<milliseconds>(stop - start); 
-		cout << "Bot's Move: " << compMove << endl;
-		cout << "Count: " << count << endl;
-		cout << "Time taken: " << duration.count() << "ms" << endl;
-		count = 0;
-		string s1 = compMove.substr(0, 2), s2 = compMove.substr(3, 2);
-		coor = getCoordinates(s1, s2);
-		move(coor[0], coor[1]);
-		displayGame();
-		activePlayer = !activePlayer;
-
-		if(winner() == black)
-		{
-			cout << "The Bot Wins!" << endl;
-			return;
-		}
-	}
+bot::bot(abalone a, int bP)
+{
+	comp = a;
+	botPlayer = bP;
+	user = !bP;
 }
 
-
-abalone comp(black);
-int botPlayer = black;
-int user = white;
-
-void setBoard(abalone a)
+void bot::setBoard(abalone a)
 {
 	comp.board = a.board;
 	comp.noOfMarbles[white] = a.noOfMarbles[white];
 	comp.noOfMarbles[black] = a.noOfMarbles[black];
+	comp.activePlayer = a.activePlayer;
 }
 
-int calcCenterDistance(string pos)
+int bot::calcCenterDistance(string pos)
 {
 	int dist = comp.mod(pos, "D4");
 	if(dist != invalid) return dist-1; // if it is inline with the center
@@ -544,7 +490,7 @@ int calcCenterDistance(string pos)
 	return min(m1, m2); // one which is least away is the actual center distance
 }
 
-int calcGrouping(string pos)
+int bot::calcGrouping(string pos)
 {
 	int count = 0; // total neighbours
 	vector<int> temp = comp.getPair(pos);
@@ -564,12 +510,12 @@ int calcGrouping(string pos)
 	return count;
 }
 
-void display()
+void bot::display()
 {
 	comp.displayGame();
 }
 
-int evaluate()
+int bot::evaluate()
 {
 	if(comp.winner() == botPlayer)
 	{
@@ -612,7 +558,7 @@ int evaluate()
 	
 }
 
-string findNeighbour(string pos, string dir)
+string bot::findNeighbour(string pos, string dir)
 {
 	if(dir == "EE")
 	{
@@ -641,7 +587,7 @@ string findNeighbour(string pos, string dir)
 	return pos;
 }
 
-vector<int> minimax(int depth, bool isMax)
+vector<int> bot::minimax(int depth, bool isMax)
 {
 	count++;
 	int value = evaluate();
@@ -792,7 +738,7 @@ vector<int> minimax(int depth, bool isMax)
 	
 }
 
-string botMove()
+string bot::botMove()
 {
 	int bestVal = -infinity, leastDepth = 100;
 	string bestMove;
@@ -863,11 +809,71 @@ string botMove()
 	return bestMove;
 }
 
+
+void playWithBot(bot b)
+{
+	abalone a;
+	a.displayGame();
+	string s;
+	while(a.winner() == -1)
+	{
+		// assuming player starts
+		cout << "Your Move: ";
+		getline(cin, s);
+
+		if (s == "exit") return;
+
+		vector<vector<vector<int>>> coor = a.isValid(s); // returns an empty vector for a false move
+														// if move is valid, gives us initial and final coordinates
+
+		if (coor.size()) // move is valid
+		{
+			a.move(coor[0], coor[1]);
+			a.activePlayer = !a.activePlayer; // switch players
+		}
+		else
+		{
+			cout << "Invalid Move!" << endl;
+			continue;
+		}
+
+		if(a.winner() == white)
+		{
+			cout << "You Win!" << endl;
+			return;
+		}
+
+		a.displayGame();
+
+		b.setBoard(a);
+		auto start = high_resolution_clock::now(); 
+		string compMove = b.botMove();
+		auto stop = high_resolution_clock::now(); 
+		auto duration = duration_cast<milliseconds>(stop - start); 
+		cout << "Bot's Move: " << compMove << endl;
+		cout << "Count: " << count << endl;
+		cout << "Time taken: " << duration.count() << "ms" << endl;
+		count = 0;
+		string s1 = compMove.substr(0, 2), s2 = compMove.substr(3, 2);
+		coor = a.getCoordinates(s1, s2);
+		a.move(coor[0], coor[1]);
+		a.displayGame();
+		a.activePlayer = !a.activePlayer;
+
+		if(a.winner() == black)
+		{
+			cout << "The Bot Wins!" << endl;
+			return;
+		}
+	}
+}
+
+
 int main()
 {
 	abalone a;
-	a.playWithBot();
-	
+	bot b(a, black);
+	playWithBot(b);	
 	cout << "Press any key to continue...";
 	getchar();
 }
