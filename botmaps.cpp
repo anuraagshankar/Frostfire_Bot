@@ -479,7 +479,7 @@ string bot::botMove()
 {
 	int bestVal = -infinity;
 	int leastDepth = 100;
-	string bestMove;
+	string bestMove = "None";
 	vector<string> marbleList = getMarbles();
 
 	for(int i = 0; i < marbleList.size(); i++)
@@ -601,6 +601,11 @@ void botvsbot(bot b1, bot b2)
 		auto start = high_resolution_clock::now();
 		compMove = b1.botMove();
 		auto stop = high_resolution_clock::now(); 
+		if(compMove == "None")
+		{
+			cout << "The Black Bot Wins!" << endl;
+			break;
+		}
 		auto duration = duration_cast<milliseconds>(stop - start);
 		cout << "White Bot's Move: " << compMove << endl;
 		cout << "Counter: " << counter << endl;
@@ -623,7 +628,12 @@ void botvsbot(bot b1, bot b2)
 		b2.set(board);
 		start = high_resolution_clock::now();
 		compMove = b2.botMove();
-		stop = high_resolution_clock::now(); 
+		stop = high_resolution_clock::now();
+		if(compMove == "None")
+		{
+			cout << "The White Bot Wins!" << endl;
+			break;
+		}
 		duration = duration_cast<milliseconds>(stop - start);
 		cout << "Black Bot's Move: " << compMove << endl;
 		cout << "Counter: " << counter << endl;
@@ -649,51 +659,10 @@ void botvsbot(bot b1, bot b2)
 	cout << "Average Time: " << totalTime/moves << "ms" <<  endl;
 }
 
-void play()
-{
-	Board board(white);
-	board.display();
-	string s;
-	while(board.winner() == -1)
-	{
-		move1:
-
-		cout << "White's Move: ";
-		getline(cin, s);
-		
-		if(board.validate(s)) board.move(s);
-		else goto move1;
-
-		if(board.winner() == white)
-		{
-			cout << "White Wins!" << endl;
-			return;
-		}
-		
-
-		board.display();
-
-		move2:
-		
-		cout << "Black's Move: ";
-		getline(cin, s);
-		if(board.validate(s)) board.move(s);
-		else goto move2;
-	
-		if(board.winner() == black)
-		{
-			cout << "Black Wins!" << endl;
-			return;
-		}
-
-		board.display();
-	}
-}
-
 int main()
 {
     Board board(white);
-	bot b1(board, 4, white);
-	bot b2(board, 4, black);
+	bot b1(board, 3, white);
+	bot b2(board, 3, black);
 	botvsbot(b1, b2);
 }
