@@ -84,6 +84,11 @@ Board::Board(int a = white)
     limits[4][0] = "E1";    limits[4][1] = "E6";
     limits[5][0] = "F1";    limits[5][1] = "F5";
     limits[6][0] = "G1";    limits[6][1] = "G4";
+
+	for(MarbleList::iterator it = marbles.begin(); it != marbles.end(); it++)
+	{
+		it->second.centralDistance = calcCenterDistance(it->first);
+	}
 }
 
 void Board::display()
@@ -216,14 +221,15 @@ void Board::move(string m)
 			marbles[m3].player = active;
 			count[!active]--;
 		}
-		else marbles[m4] = {!active};
+		else { marbles[m4] = {!active}; marbles[m4].centralDistance = calcCenterDistance(m4); }
 		marbles[m3].player = active;
 		marbles[m2].player = active;
 	}
 	// marbles are being moved
 	else
 	{
-		marbles[m3].player = {active};
+		marbles[m3] = {active};
+		marbles[m3].centralDistance = calcCenterDistance(m3);
 	}
 	marbles.erase(m1);
 
@@ -507,9 +513,12 @@ vector<int> bot::minimax(int depth, bool isMax, int alpha, int beta)
 	}
 }
 
+
 class botG
 {
 	friend void playAgainstBot(botG b);
+	void botvsbot(bot b1, botG b2);
+	void botvsbot(botG b1, bot b2);
 	friend void play();
 
 	Board comp;
@@ -787,6 +796,7 @@ string botG::botMove()
 	return bestMove;
 }
 
+
 string bot::botMove()
 {
 	int bestVal = -infinity;
@@ -903,7 +913,7 @@ void playAgainstBot(bot b)
 	}
 }
 
-void botvsbot(botG b1, botG b2)
+void botvsbot(bot b1, botG b2)
 {
 	Board board(white);
 	board.display();
@@ -976,6 +986,78 @@ void botvsbot(botG b1, botG b2)
 }
 
 void botvsbot(botG b1, bot b2)
+{
+	Board board(white);
+	board.display();
+	string compMove;
+	float maxTime = 0, totalTime = 0, moves = 0;
+	while(board.winner() == -1)
+	{
+		
+		b1.set(board);
+		auto start = high_resolution_clock::now();
+		compMove = b1.botMove();
+		auto stop = high_resolution_clock::now(); 
+		if(compMove == "None")
+		{
+			cout << "The Black Bot Wins!" << endl;
+			break;
+		}
+		auto duration = duration_cast<milliseconds>(stop - start);
+		cout << "White Bot's Move: " << compMove << endl;
+		cout << "Counter: " << counter << endl;
+		counter = 0;
+		float moveTime = duration.count();
+		
+		cout << "Time taken: " << moveTime << "ms" << endl;
+		if(moveTime > maxTime) maxTime = moveTime;
+		moves++;
+		totalTime += moveTime;
+		board.move(compMove);
+
+		if(board.winner() == white)
+		{
+			cout << "The White Bot Wins!" << endl;
+			break;
+		}
+
+		board.display();
+
+		b2.set(board);
+		start = high_resolution_clock::now();
+		compMove = b2.botMove();
+		stop = high_resolution_clock::now();
+		if(compMove == "None")
+		{
+			cout << "The White Bot Wins!" << endl;
+			break;
+		}
+		duration = duration_cast<milliseconds>(stop - start);
+		cout << "Black Bot's Move: " << compMove << endl;
+		cout << "Counter: " << counter << endl;
+		counter = 0;
+		moveTime = duration.count();
+		cout << "Time taken: " << moveTime << "ms" << endl;
+		if(moveTime > maxTime) maxTime = moveTime;
+		moves++;
+		totalTime += moveTime;
+		board.move(compMove);
+
+		board.display();
+
+		if(board.winner() == black)
+		{
+			cout << "The Black Bot Wins!" << endl;
+			break;
+		}
+	}
+
+	cout << "Maximum Time: " << maxTime << "ms" << endl;
+	cout << "Total Time: " << totalTime << "s" << endl;
+	cout << "Average Time: " << totalTime/moves << "ms" <<  endl;
+}
+
+void botvsbot(botG b1, botG b2)
 {
 	Board board(white);
 	board.display();
@@ -1278,7 +1360,7 @@ void play()
 int main()
 {
 	Board board;
-	botG b1(board, 4, white);
+	botG b1(board, 3, white);
 	bot b2(board, 4, black);
 	botvsbot(b1, b2);
 
