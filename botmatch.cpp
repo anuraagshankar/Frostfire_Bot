@@ -386,9 +386,9 @@ vector<string> bot::getMarbles(int color)
 vector<int> bot::minimax(int depth, bool isMax, int alpha, int beta)
 {
 	counter++;
-	int value = evaluate();
-
-	if(value == infinity || value == -infinity || depth == maxDepth) return {value, depth};
+	if(depth == maxDepth) return {evaluate(), depth};
+	else if(comp.winner() == botPlayer) return {infinity, depth};
+	else if(comp.winner() == !botPlayer) return {-infinity, depth}; 
 
 	vector<string> marbleList = getMarbles((isMax)?botPlayer:!botPlayer);
 	
@@ -513,6 +513,66 @@ vector<int> bot::minimax(int depth, bool isMax, int alpha, int beta)
 	}
 }
 
+string bot::botMove()
+{
+	int bestVal = -infinity;
+	int leastDepth = 100;
+	string bestMove = "None";
+	vector<string> marbleList = getMarbles(botPlayer);
+
+	for(int i = 0; i < marbleList.size(); i++)
+	{
+		
+		string marblePos = marbleList[i];
+		string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
+		for(int i = 0; i < 6; i++)
+		{
+			string neighbour = comp.getNeighbour(marblePos, dirs[i]);
+
+			string tempMove = marblePos + " " + neighbour;
+			if(comp.validate(tempMove))
+			{
+				MarbleList temp = comp.marbles;
+				int whites = comp.count[white], blacks = comp.count[black];
+
+				comp.move(tempMove);
+
+				vector<int> val = minimax(0, false, -infinity, infinity);
+
+				if(val[0] > bestVal)
+				{
+					bestVal = val[0];
+					leastDepth = val[1];
+					bestMove = tempMove;
+				}
+				else  if(val[0] >= bestVal && val[1] < leastDepth)
+				{
+					bestVal = val[0];
+					leastDepth = val[1];
+					bestMove = tempMove;
+				}
+				else if(val[0] == bestVal && val[1] == leastDepth)
+				{
+					int x = rand() % 2;
+					if(x)
+					{
+						bestVal = val[0];
+						leastDepth = val[1];
+						bestMove = tempMove;
+					}
+				}
+
+				// undo
+				comp.marbles = temp;
+				comp.count[white] = whites;
+				comp.count[black] = blacks;
+				comp.active = !comp.active;
+			}
+		}
+		
+	}
+	return bestMove;
+}
 
 class botG
 {
@@ -608,9 +668,9 @@ vector<string> botG::getMarbles(int color)
 vector<int> botG::minimax(int depth, bool isMax, int alpha, int beta)
 {
 	counter++;
-	int value = evaluate();
-
-	if(value == infinity || value == -infinity || depth == maxDepth) return {value, depth};
+	if(depth == maxDepth) return {evaluate(), depth};
+	else if(comp.winner() == botPlayer) return {infinity, depth};
+	else if(comp.winner() == !botPlayer) return {-infinity, depth}; 
 
 	vector<string> marbleList = getMarbles((isMax)?botPlayer:!botPlayer);
 	
@@ -736,68 +796,6 @@ vector<int> botG::minimax(int depth, bool isMax, int alpha, int beta)
 }
 
 string botG::botMove()
-{
-	int bestVal = -infinity;
-	int leastDepth = 100;
-	string bestMove = "None";
-	vector<string> marbleList = getMarbles(botPlayer);
-
-	for(int i = 0; i < marbleList.size(); i++)
-	{
-		
-		string marblePos = marbleList[i];
-		string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
-		for(int i = 0; i < 6; i++)
-		{
-			string neighbour = comp.getNeighbour(marblePos, dirs[i]);
-
-			string tempMove = marblePos + " " + neighbour;
-			if(comp.validate(tempMove))
-			{
-				MarbleList temp = comp.marbles;
-				int whites = comp.count[white], blacks = comp.count[black];
-
-				comp.move(tempMove);
-
-				vector<int> val = minimax(0, false, -infinity, infinity);
-
-				if(val[0] > bestVal)
-				{
-					bestVal = val[0];
-					leastDepth = val[1];
-					bestMove = tempMove;
-				}
-				else  if(val[0] >= bestVal && val[1] < leastDepth)
-				{
-					bestVal = val[0];
-					leastDepth = val[1];
-					bestMove = tempMove;
-				}
-				else if(val[0] == bestVal && val[1] == leastDepth)
-				{
-					int x = rand() % 2;
-					if(x)
-					{
-						bestVal = val[0];
-						leastDepth = val[1];
-						bestMove = tempMove;
-					}
-				}
-
-				// undo
-				comp.marbles = temp;
-				comp.count[white] = whites;
-				comp.count[black] = blacks;
-				comp.active = !comp.active;
-			}
-		}
-		
-	}
-	return bestMove;
-}
-
-
-string bot::botMove()
 {
 	int bestVal = -infinity;
 	int leastDepth = 100;
@@ -1360,15 +1358,8 @@ void play()
 int main()
 {
 	Board board;
-	botG b1(board, 3, white);
-	bot b2(board, 4, black);
+	bot b1(board, 3, white);
+	botG b2(board, 3, black);
 	botvsbot(b1, b2);
 
-	/*for(int i = 0; i < 10; i++)
-	{
-		cout << "Game " << i+1 << ":\n";
-		botG b1(board, 3, white);
-		bot b2(board, 3, black);
-		check(b1, b2);
-	}*/
 }
