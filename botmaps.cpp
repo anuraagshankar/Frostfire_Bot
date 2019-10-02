@@ -1,6 +1,10 @@
+/*
+	Standard Bot (Depth 3 Grouping)
+*/
+
 #include <iostream>
 #include <math.h>
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <chrono>
 using namespace std;
@@ -13,8 +17,6 @@ using namespace std::chrono;
 class bot;
 
 void playAgainstBot(bot b);
-void botvsbot(bot b1, bot b2);
-void play();
 
 struct Marble
 {
@@ -29,14 +31,13 @@ struct Marble
     }
 };
 
-typedef map<string, Marble> MarbleList;
+typedef unordered_map<string, Marble> MarbleList;
 
 class Board
 {
 	friend class bot;
+	friend class bot;
 	friend void playAgainstBot(bot b);
-	friend void botvsbot(bot b1, bot b2);
-	friend void play();
 
     // data members
     MarbleList marbles;
@@ -54,8 +55,10 @@ public:
 	bool inLimit(string rd);
 	void move(string m);
 	float calcCenterDistance(string pos);
+	int calcGrouping(string pos);
 	string getNeighbour(string pos, string dir);
 	int winner();
+	int getactive() { return active; }
 };
 
 Board::Board(int a = white)
@@ -78,6 +81,11 @@ Board::Board(int a = white)
     limits[4][0] = "E1";    limits[4][1] = "E6";
     limits[5][0] = "F1";    limits[5][1] = "F5";
     limits[6][0] = "G1";    limits[6][1] = "G4";
+
+	for(MarbleList::iterator it = marbles.begin(); it != marbles.end(); it++)
+	{
+		it->second.centralDistance = calcCenterDistance(it->first);
+	}
 }
 
 void Board::display()
@@ -210,14 +218,15 @@ void Board::move(string m)
 			marbles[m3].player = active;
 			count[!active]--;
 		}
-		else marbles[m4] = {!active};
+		else { marbles[m4] = {!active}; marbles[m4].centralDistance = calcCenterDistance(m4); }
 		marbles[m3].player = active;
 		marbles[m2].player = active;
 	}
 	// marbles are being moved
 	else
 	{
-		marbles[m3].player = {active};
+		marbles[m3] = {active};
+		marbles[m3].centralDistance = calcCenterDistance(m3);
 	}
 	marbles.erase(m1);
 
@@ -227,6 +236,24 @@ void Board::move(string m)
 float Board::calcCenterDistance(string pos)
 {
 	return sqrt((pos[0]-'D')*(pos[0]-'D') + (pos[1]-'4')*(pos[1]-'4'));
+}
+
+int Board::calcGrouping(string pos)
+{
+	int grouping = 0;
+	string neighbours[6] = {pos, pos, pos, pos, pos, pos};
+	neighbours[0][1]++;
+	neighbours[1][1]--;
+	neighbours[2][0]--; neighbours[2][1]++; 
+	neighbours[3][0]++; neighbours[3][1]--; 
+	neighbours[4][0]++;
+	neighbours[5][0]--;
+	for(int i = 0; i < 6; i++)
+	{
+		if(marbles.count(neighbours[i]) && marbles[neighbours[i]].player == marbles[pos].player)
+			grouping++;
+	}
+	return grouping;
 }
 
 string Board::getNeighbour(string pos, string dir)
@@ -268,18 +295,18 @@ int Board::winner()
 class bot
 {
 	friend void playAgainstBot(bot b);
-	friend void botvsbot(bot b1, bot b2);
 
 	Board comp;
-	int maxDepth;
 	int botPlayer;
+	int maxDepth;
 public:
 	bot(Board c, int mD, int bP);
 	int evaluate();
-	vector<int> minimax(int depth, bool isMax);
+	vector<int> minimax(int depth, bool isMax, int alpha, int beta);
 	string botMove();
 	void set(Board b);
-	vector<string> getMarbles();
+	vector<string> getMarbles(int color);
+	int getplayer() { return botPlayer; }
 };
 
 bot::bot(Board c, int mD, int bP)
@@ -287,10 +314,6 @@ bot::bot(Board c, int mD, int bP)
 	comp = c;
 	maxDepth = mD;
 	botPlayer = bP;
-	for(MarbleList::iterator it = comp.marbles.begin(); it != comp.marbles.end(); it++)
-	{
-		it->second.centralDistance = comp.calcCenterDistance(it->first);
-	}
 }
 
 void bot::set(Board b)
@@ -318,11 +341,13 @@ int bot::evaluate()
 	int centerDistance = 0, grouping = 0, profit;
 	profit = comp.count[botPlayer] - comp.count[!botPlayer];
 	value += profit * 1000;
+	// value += profit * 2000;
 	for(MarbleList::iterator it = comp.marbles.begin(); it != comp.marbles.end(); it++)
 	{
 		if(it->second.player == botPlayer)
 		{
 			centerDistance += it->second.centralDistance;
+			grouping += comp.calcGrouping(it->first);
 		}
 	}
 
@@ -331,35 +356,37 @@ int bot::evaluate()
 	else if(centerDistance < 27) value += 200;
 	else if(centerDistance < 32) value += 100;
 
-	/*if(grouping > 35) value += 320;
+	if(grouping > 35) value += 320;
 	else if(grouping > 30) value += 240;
 	else if(grouping > 25) value += 160;
-	else if(grouping > 20) value += 80;*/
+	else if(grouping > 20) value += 80;
+
+	/*if(grouping > 32) value += 420;
+	else if(grouping > 27) value += 340;
+	else if(grouping > 22) value += 250;
+	else if(grouping > 19) value += 150;*/
 
 	return value;
 	
 }
 
-int counter = 0;
-
-vector<string> bot::getMarbles()
+vector<string> bot::getMarbles(int color)
 {
 	vector<string> allMarbles;
-	for(map<string, Marble>::iterator it = comp.marbles.begin(); it != comp.marbles.end(); it++)
+	for(unordered_map<string, Marble>::iterator it = comp.marbles.begin(); it != comp.marbles.end(); it++)
 	{
-		allMarbles.push_back(it->first);
+		if(it->second.player == color) allMarbles.push_back(it->first);
 	}
 	return allMarbles;
 }
 
-vector<int> bot::minimax(int depth, bool isMax)
+vector<int> bot::minimax(int depth, bool isMax, int alpha, int beta)
 {
-	counter++;
-	int value = evaluate();
+	if(depth == maxDepth) return {evaluate(), depth};
+	else if(comp.winner() == botPlayer) return {infinity, depth};
+	else if(comp.winner() == !botPlayer) return {-infinity, depth}; 
 
-	if(value == infinity || value == -infinity || depth == maxDepth) return {value, depth};
-
-	vector<string> marbleList = getMarbles();
+	vector<string> marbleList = getMarbles((isMax)?botPlayer:!botPlayer);
 	
 	if(isMax) // maximizer's move
 	{
@@ -368,124 +395,8 @@ vector<int> bot::minimax(int depth, bool isMax)
 
 		for(int i = 0; i < marbleList.size(); i++)
 		{
-			if(comp.marbles[marbleList[i]].player == botPlayer)
-			{
-				string marblePos = marbleList[i];
-				string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
-				for(int i = 0; i < 6; i++)
-				{
-					string neighbour = comp.getNeighbour(marblePos, dirs[i]);
-
-					string tempMove = marblePos + " " + neighbour;
-					if(comp.validate(tempMove))
-					{
-						MarbleList temp = comp.marbles;
-						int whites = comp.count[white], blacks = comp.count[black];
-
-						comp.move(tempMove);
-
-						vector<int> val = minimax(depth+1, false);
-
-						if(val[0] > maxVal)
-						{
-							maxVal = val[0];
-							leastDepth = val[1];
-						}
-						else  if(val[0] >= maxVal && val[1] < depth)
-						{
-							maxVal = val[0];
-							leastDepth = val[1];
-						}
-						else if(val[0] == maxVal && val[1] == depth)
-						{
-							int x = rand() % 2;
-							if(x)
-							{
-								maxVal = val[0];
-								leastDepth = val[1];
-							}
-						}
-
-						// undo
-						comp.marbles = temp;
-						comp.count[white] = whites;
-						comp.count[black] = blacks;
-						comp.active = !comp.active;
-					}
-				}
-			}
-		}
-		return {maxVal, leastDepth};
-	}
-	else // minimizer's move
-	{
-		int minVal = infinity;
-		int leastDepth = 100;
-
-		for(int i = 0; i < marbleList.size(); i++)
-		{
-			if(comp.marbles[marbleList[i]].player == !botPlayer)
-			{
-				string marblePos = marbleList[i];
-				string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
-				for(int i = 0; i < 6; i++)
-				{
-					string neighbour = comp.getNeighbour(marblePos, dirs[i]);
-
-					string tempMove = marblePos + " " + neighbour;
-					if(comp.validate(tempMove))
-					{
-						MarbleList temp = comp.marbles;
-						int whites = comp.count[white], blacks = comp.count[black];
-
-						comp.move(tempMove);
-
-						vector<int> val = minimax(depth+1, true);
-
-						if(val[0] < minVal)
-						{
-							minVal = val[0];
-							leastDepth = val[1];
-						}
-						else  if(val[0] <= minVal && val[1] < depth)
-						{
-							minVal = val[0];
-							leastDepth = val[1];
-						}
-						else if(val[0] == minVal && val[1] == depth)
-						{
-							int x = rand() % 2;
-							if(x)
-							{
-								minVal = val[0];
-								leastDepth = val[1];
-							}
-						}
-
-						// undo
-						comp.marbles = temp;
-						comp.count[white] = whites;
-						comp.count[black] = blacks;
-						comp.active = !comp.active;
-					}
-				}
-			}
-		}
-		return {minVal, leastDepth};
-	}
-}
-
-string bot::botMove()
-{
-	int bestVal = -infinity;
-	int leastDepth = 100;
-	string bestMove = "None";
-	vector<string> marbleList = getMarbles();
-
-	for(int i = 0; i < marbleList.size(); i++)
-	{
-		if(comp.marbles[marbleList[i]].player == botPlayer)
-		{
+			
+			
 			string marblePos = marbleList[i];
 			string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
 			for(int i = 0; i < 6; i++)
@@ -500,28 +411,25 @@ string bot::botMove()
 
 					comp.move(tempMove);
 
-					vector<int> val = minimax(0, false);
+					vector<int> val = minimax(depth+1, false, alpha, beta);
 
-					if(val[0] > bestVal)
+					if(val[0] > maxVal)
 					{
-						bestVal = val[0];
+						maxVal = val[0];
 						leastDepth = val[1];
-						bestMove = tempMove;
 					}
-					else  if(val[0] >= bestVal && val[1] < leastDepth)
+					else  if(val[0] >= maxVal && val[1] < depth)
 					{
-						bestVal = val[0];
+						maxVal = val[0];
 						leastDepth = val[1];
-						bestMove = tempMove;
 					}
-					else if(val[0] == bestVal && val[1] == leastDepth)
+					else if(val[0] == maxVal && val[1] == depth)
 					{
 						int x = rand() % 2;
 						if(x)
 						{
-							bestVal = val[0];
+							maxVal = val[0];
 							leastDepth = val[1];
-							bestMove = tempMove;
 						}
 					}
 
@@ -530,9 +438,134 @@ string bot::botMove()
 					comp.count[white] = whites;
 					comp.count[black] = blacks;
 					comp.active = !comp.active;
+
+					// alpha-beta pruning
+					alpha = max(alpha, maxVal);
+					if(beta <= alpha) break;
 				}
 			}
+			
 		}
+		return {maxVal, leastDepth};
+	}
+	else // minimizer's move
+	{
+		int minVal = infinity;
+		int leastDepth = 100;
+
+		for(int i = 0; i < marbleList.size(); i++)
+		{
+			
+			string marblePos = marbleList[i];
+			string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
+			for(int i = 0; i < 6; i++)
+			{
+				string neighbour = comp.getNeighbour(marblePos, dirs[i]);
+
+				string tempMove = marblePos + " " + neighbour;
+				if(comp.validate(tempMove))
+				{
+					MarbleList temp = comp.marbles;
+					int whites = comp.count[white], blacks = comp.count[black];
+
+					comp.move(tempMove);
+
+					vector<int> val = minimax(depth+1, true, alpha, beta);
+
+					if(val[0] < minVal)
+					{
+						minVal = val[0];
+						leastDepth = val[1];
+					}
+					else  if(val[0] <= minVal && val[1] < depth)
+					{
+						minVal = val[0];
+						leastDepth = val[1];
+					}
+					else if(val[0] == minVal && val[1] == depth)
+					{
+						int x = rand() % 2;
+						if(x)
+						{
+							minVal = val[0];
+							leastDepth = val[1];
+						}
+					}
+
+					// undo
+					comp.marbles = temp;
+					comp.count[white] = whites;
+					comp.count[black] = blacks;
+					comp.active = !comp.active;
+
+					// alpha-beta pruning
+					beta = min(beta, minVal);
+					if(beta <= alpha) break;
+				}
+			}
+		
+		}
+		return {minVal, leastDepth};
+	}
+}
+
+string bot::botMove()
+{
+	int bestVal = -infinity;
+	int leastDepth = 100;
+	string bestMove = "None";
+	vector<string> marbleList = getMarbles(botPlayer);
+
+	for(int i = 0; i < marbleList.size(); i++)
+	{
+		
+		string marblePos = marbleList[i];
+		string dirs[] = {"EE", "WW", "NW", "SE", "SW", "NE"};
+		for(int i = 0; i < 6; i++)
+		{
+			string neighbour = comp.getNeighbour(marblePos, dirs[i]);
+
+			string tempMove = marblePos + " " + neighbour;
+			if(comp.validate(tempMove))
+			{
+				MarbleList temp = comp.marbles;
+				int whites = comp.count[white], blacks = comp.count[black];
+
+				comp.move(tempMove);
+
+				vector<int> val = minimax(0, false, -infinity, infinity);
+
+				if(val[0] > bestVal)
+				{
+					bestVal = val[0];
+					leastDepth = val[1];
+					bestMove = tempMove;
+				}
+				else  if(val[0] >= bestVal && val[1] < leastDepth)
+				{
+					bestVal = val[0];
+					leastDepth = val[1];
+					bestMove = tempMove;
+				}
+				else if(val[0] == bestVal && val[1] == leastDepth)
+				{
+					int x = rand() % 2;
+					if(x)
+					{
+						bestVal = val[0];
+						leastDepth = val[1];
+						bestMove = tempMove;
+					}
+				}
+
+				// undo
+				comp.marbles = temp;
+				comp.count[white] = whites;
+				comp.count[black] = blacks;
+				comp.active = !comp.active;
+			}
+		}
+		
 	}
 	return bestMove;
 }
@@ -540,129 +573,64 @@ string bot::botMove()
 void playAgainstBot(bot b)
 {
 	Board board(white);
-	board.display();
+	//board.display();
 	string s;
-	while(board.winner() == -1)
-	{
-		cout << "Your Move: ";
-		getline(cin, s);
-		
-		if(s == "exit")	return;
 
-		if(board.validate(s))
+	while (board.winner() == -1)
+	{
+		//cout << "Your Move: ";
+		if (board.getactive() != b.getplayer())
 		{
+			getline(cin, s);
 			board.move(s);
 		}
-		else
-		{
-			cout << "Invalid Move!" << endl;
-			continue;
-		}
 
-		if(board.winner() == white)
+		//if (s == "exit")
+		//	return;
+
+		// if (board.validate(s))
+		// {
+		// }
+		// // else
+		// {
+		// 	cout << "Invalid Move!" << endl;
+		// 	continue;
+		// }
+
+		if (board.winner() == white)
 		{
-			cout << "You Win!" << endl;
+			//cout << endl;
 			return;
 		}
 
-		board.display();
+		//board.display();
 
 		b.set(board);
-		auto start = high_resolution_clock::now();
 		string compMove = b.botMove();
-		auto stop = high_resolution_clock::now(); 
-		auto duration = duration_cast<milliseconds>(stop - start);
-		cout << "Bot's Move: " << compMove << endl;
-		cout << "Counter: " << counter << endl;
-		counter = 0;
-		cout << "Time taken: " << duration.count() << "ms" << endl;
+		//auto stop = high_resolution_clock::now();
+		//auto duration = duration_cast<milliseconds>(stop - start);
+		cout << compMove << endl;
+		// cout << "Counter: " << counter << endl;
+		// counter = 0;
+		// cout << "Time taken: " << duration.count() << "ms" << endl;
 		board.move(compMove);
 
-		board.display();
+		//board.display();
 
-		if(board.winner() == black)
+		if (board.winner() == black)
 		{
-			cout << "The Bot Wins!" << endl;
+			//cout << "The Bot Wins!" << endl;
 			return;
 		}
 	}
-}
-
-void botvsbot(bot b1, bot b2)
-{
-	Board board(white);
-	board.display();
-	string compMove;
-	float maxTime = 0, totalTime = 0, moves = 0;
-	while(board.winner() == -1)
-	{
-		
-		b1.set(board);
-		auto start = high_resolution_clock::now();
-		compMove = b1.botMove();
-		auto stop = high_resolution_clock::now(); 
-		if(compMove == "None")
-		{
-			cout << "The Black Bot Wins!" << endl;
-			break;
-		}
-		auto duration = duration_cast<milliseconds>(stop - start);
-		cout << "White Bot's Move: " << compMove << endl;
-		cout << "Counter: " << counter << endl;
-		counter = 0;
-		float moveTime = duration.count();
-		cout << "Time taken: " << moveTime << "ms" << endl;
-		if(moveTime > maxTime) maxTime = moveTime;
-		moves++;
-		totalTime += moveTime;
-		board.move(compMove);
-
-		if(board.winner() == white)
-		{
-			cout << "The White Bot Wins!" << endl;
-			break;
-		}
-
-		board.display();
-
-		b2.set(board);
-		start = high_resolution_clock::now();
-		compMove = b2.botMove();
-		stop = high_resolution_clock::now();
-		if(compMove == "None")
-		{
-			cout << "The White Bot Wins!" << endl;
-			break;
-		}
-		duration = duration_cast<milliseconds>(stop - start);
-		cout << "Black Bot's Move: " << compMove << endl;
-		cout << "Counter: " << counter << endl;
-		counter = 0;
-		moveTime = duration.count();
-		cout << "Time taken: " << moveTime << "ms" << endl;
-		if(moveTime > maxTime) maxTime = moveTime;
-		moves++;
-		totalTime += moveTime;
-		board.move(compMove);
-
-		board.display();
-
-		if(board.winner() == black)
-		{
-			cout << "The Black Bot Wins!" << endl;
-			break;
-		}
-	}
-
-	cout << "Maximum Time: " << maxTime << "ms" << endl;
-	cout << "Total Time: " << totalTime << "s" << endl;
-	cout << "Average Time: " << totalTime/moves << "ms" <<  endl;
 }
 
 int main()
 {
-    Board board(white);
-	bot b1(board, 3, white);
-	bot b2(board, 3, black);
-	botvsbot(b1, b2);
+	Board board(white);
+	int player;
+	cin >> player;
+	cin.get();
+	bot b1(board, 3, player);
+	playAgainstBot(b1);
 }
